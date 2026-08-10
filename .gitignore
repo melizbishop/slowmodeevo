@@ -8,6 +8,7 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 .pytest_cache/
+.numba_cache/
 
 # Virtualenvs
 .venv/
@@ -19,6 +20,14 @@ env/
 .idea/
 *.swp
 
-# Generated figure outputs (regenerate with figures/run_all.py)
+# Generated tables and figure outputs
+outputs/
+*.csv
 *.png
+*.jpg
+*.jpeg
+*.gif
+*.tif
+*.tiff
+*.webp
 *.pdf

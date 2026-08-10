@@ -43,6 +43,25 @@ For every system, the pipeline runs:
 8. **Hub-and-arm geometry** in the leading non-trivial eigenvectors:
    $\pi$-weighted hub + per-basin arm vectors as centroid$-$hub.
 
+## All-pair keypoint-distance workflow
+
+Use `all_pair_distance_pipeline.ipynb` as the single entry point for the
+multispecies mouse analysis. It:
+
+- generates all unique pairwise keypoint distances from the source HDF5 data;
+- supports projection reuse and single-species tuning of $d$, $N$, $\tau$, and
+  basin count $M$;
+- runs one species or the complete multispecies batch;
+- compares slow-mode eigenspace arms, transfer dynamics, basin occupancy, and
+  hierarchical species structure; and
+- joins frame assignments to named MoSeq syllables to describe behavior within
+  each basin.
+
+Reusable implementation lives in `all_pair_distance_data.py`,
+`pooled_user_pipeline.py`, and `multi_species_comparison.py`. Heavy notebook
+stages are guarded by explicit `RUN_*` flags, and existing saved batch runs are
+resumed from `outputs/single_species_distance_comparison/`.
+
 To check a candidate representation on your own data, `diagnostics.run_diagnostics`
 evaluates the paper's four falsifiable criteria (spectral gap, participation
 ratio, simplex/arms geometry, and held-out prediction beating a memoryless

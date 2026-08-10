@@ -24,7 +24,8 @@ from sklearn.decomposition import PCA
 # "Wavelet decomposition").  Identical numerical recipe to find_wavelets.py
 # in the original code repository, refactored for clarity and made GPU-free.
 # ---------------------------------------------------------------------------
-def morlet_wavelet_amplitudes(x, fs, fmin, fmax, n_freqs, omega0=5.0):
+def morlet_wavelet_amplitudes(x, fs, fmin, fmax, n_freqs, omega0=5.0,
+                              dtype=None):
     """Morlet wavelet amplitudes of a multivariate time series.
 
     Parameters
@@ -40,6 +41,10 @@ def morlet_wavelet_amplitudes(x, fs, fmin, fmax, n_freqs, omega0=5.0):
     omega0 : float
         Dimensionless Morlet parameter (controls time-frequency tradeoff).
         We use omega0 = 5 throughout.
+    dtype : numpy dtype or None
+        Optional dtype for the returned amplitude matrix.  ``None`` preserves
+        the historical float64 output; ``np.float32`` is useful for large
+        pooled runs where memory is the limiting factor.
 
     Returns
     -------
@@ -61,7 +66,8 @@ def morlet_wavelet_amplitudes(x, fs, fmin, fmax, n_freqs, omega0=5.0):
                        / (np.log(2) * (n_freqs - 1))))
     f = (1.0 / Ts)[::-1]
 
-    out = np.zeros((T, d * n_freqs))
+    out_dtype = float if dtype is None else dtype
+    out = np.zeros((T, d * n_freqs), dtype=out_dtype)
     for c in range(d):
         out[:, c * n_freqs:(c + 1) * n_freqs] = _wavelet_one_channel(
             x[:, c], f, dt, omega0).T
@@ -86,10 +92,7 @@ def _wavelet_one_channel(x, f, dt, omega0):
     xhat = np.fft.fftshift(np.fft.fft(x_pad))
     L = len(f)
     amp = np.zeros((L, M))
-    if wasodd:
-        idx = np.arange(M // 2, M // 2 + M - 2).astype(int)
-    else:
-        idx = np.arange(M // 2, M // 2 + M).astype(int)
+    idx = np.arange(M // 2, M // 2 + M).astype(int)
     norm = (np.pi ** -0.25) * np.exp(0.25 * (omega0
                                              - np.sqrt(omega0 ** 2 + 2)) ** 2)
     for i in range(L):
@@ -170,7 +173,15 @@ def pca_with_shuffle_threshold(amplitudes, n_shuffles=10, max_keep=50, seed=0,
 # Cao's E_1(d) saturation criterion for embedding dimension (Cao 1997).
 # Used to choose d in Sec. "Delay embedding and state space construction".
 # ---------------------------------------------------------------------------
-def cao_e1(X, max_d=20, tau=1, n_samples=20000, seed=0):
+def cao_e1(
+    X,
+    max_d=20,
+    tau=1,
+    n_samples=20000,
+    seed=0,
+    n_reference_samples=None,
+    verbose=False,
+):
     """Cao's E_1(d) statistic for delay embedding.
 
     Parameters
@@ -182,8 +193,15 @@ def cao_e1(X, max_d=20, tau=1, n_samples=20000, seed=0):
     tau : int
         Delay (in frames).  Default 1, matching the manuscript.
     n_samples : int
-        Random subset size (Cao's statistic depends only on nearest-neighbour
-        structure; subsampling keeps cost manageable for long series).
+        Number of query points used to estimate Cao's statistic.
+    n_reference_samples : int, optional
+        Maximum number of valid embedded points in the nearest-neighbour
+        reference pool. The default, ``None``, preserves the original exact
+        calculation against every embedded point. Set this for very long
+        recordings to retain Cao's E1 calculation with a deterministic,
+        bounded nearest-neighbour pool.
+    verbose : bool, default False
+        If True, print progress before and after each embedding dimension.
 
     Returns
     -------
@@ -191,44 +209,115 @@ def cao_e1(X, max_d=20, tau=1, n_samples=20000, seed=0):
         E_1(d) for d = 1..max_d-1.  Saturation indicates the embedding
         dimension; first d at which E_1 plateaus is the manuscript's choice.
     """
+    import time
     from scipy.spatial import cKDTree
     rng = np.random.default_rng(seed)
-    X = np.asarray(X, dtype=float)
+    X = np.asarray(X)
+    if X.ndim == 1:
+        X = X[:, None]
+    if X.ndim != 2:
+        raise ValueError(f"Expected a 1-D or 2-D time series; got shape {X.shape}")
     T, p = X.shape
-    if T > n_samples:
-        idx = rng.choice(T - max_d * tau - 2, size=n_samples, replace=False)
-    else:
-        idx = np.arange(T - max_d * tau - 2)
+    max_d = int(max_d)
+    tau = int(tau)
+    n_valid = T - max_d * tau - 2
+    if n_valid <= 1:
+        raise ValueError(
+            f"Time series has {T} rows, too short for max_d={max_d}, tau={tau}"
+        )
 
-    def embed(d):
-        l = T - (d - 1) * tau
-        E = np.zeros((l, d * p))
+    bounded_reference = n_reference_samples is not None
+    if bounded_reference and n_valid > int(n_reference_samples):
+        reference_idx = np.sort(
+            rng.choice(n_valid, size=int(n_reference_samples), replace=False)
+        )
+    elif bounded_reference:
+        reference_idx = np.arange(n_valid)
+    else:
+        reference_idx = None
+
+    if n_valid > int(n_samples):
+        query_idx = rng.choice(n_valid, size=int(n_samples), replace=False)
+    else:
+        query_idx = np.arange(n_valid)
+    if bounded_reference:
+        if len(reference_idx) > int(n_samples):
+            query_positions = np.sort(
+                rng.choice(len(reference_idx), size=int(n_samples), replace=False)
+            )
+        else:
+            query_positions = np.arange(len(reference_idx))
+        query_idx = reference_idx[query_positions]
+
+    if verbose:
+        reference_rows = len(reference_idx) if bounded_reference else n_valid
+        print(
+            "Cao E1 scan: "
+            f"T={T:,}, features={p}, max_d={max_d}, tau={tau}, "
+            f"query_rows={len(query_idx):,}, reference_rows={reference_rows:,}",
+            flush=True,
+        )
+
+    def embed_at(indices, d):
+        E = np.empty((len(indices), d * p), dtype=X.dtype)
         for k in range(d):
-            E[:, k * p:(k + 1) * p] = X[k * tau:k * tau + l]
+            E[:, k * p:(k + 1) * p] = X[indices + k * tau]
+        return E
+
+    def embed_all(d):
+        n_rows = T - (d - 1) * tau
+        E = np.empty((n_rows, d * p), dtype=X.dtype)
+        for k in range(d):
+            E[:, k * p:(k + 1) * p] = X[k * tau:k * tau + n_rows]
         return E
 
     E1 = np.zeros(max_d - 1)
     a_prev = None
     for d in range(1, max_d):
-        Ed = embed(d)
-        Edp = embed(d + 1)
-        sub_d = Ed[idx]
-        sub_dp = Edp[idx]
-        # Nearest neighbour in d-dim (excluding self).
+        t0 = time.perf_counter()
+        if verbose:
+            print(
+                f"[Cao E1] d={d}/{max_d - 1}: building embeddings "
+                f"({d * p} -> {(d + 1) * p} dimensions)",
+                flush=True,
+            )
+        if bounded_reference:
+            Ed = embed_at(reference_idx, d)
+            Edp = embed_at(reference_idx, d + 1)
+            sub_d = Ed[query_positions]
+            sub_dp = Edp[query_positions]
+        else:
+            Ed = embed_all(d)
+            Edp = embed_all(d + 1)
+            sub_d = Ed[query_idx]
+            sub_dp = Edp[query_idx]
+        if verbose:
+            print(
+                f"[Cao E1] d={d}/{max_d - 1}: querying nearest neighbors "
+                f"against {Ed.shape[0]:,} reference rows",
+                flush=True,
+            )
         tree = cKDTree(Ed)
         dists, nbrs = tree.query(sub_d, k=2)
-        nn = nbrs[:, 1]; dnn = dists[:, 1]
-        # Map nn to (d+1)-dim space (truncate if out of range).
+        nn = nbrs[:, 1]
         valid = nn < Edp.shape[0]
-        sub_d_v = sub_d[valid]
-        sub_dp_v = sub_dp[valid]
-        nn_v = nn[valid]
-        dnn_v = np.maximum(dnn[valid], 1e-12)
-        # Distance after promoting to d+1-dim.
-        dnp = np.linalg.norm(sub_dp_v - Edp[nn_v], axis=1)
-        a_d = np.mean(dnp / dnn_v)
+        dnn = np.maximum(dists[valid, 1], 1e-12)
+        dnp = np.linalg.norm(sub_dp[valid] - Edp[nn[valid]], axis=1)
+        a_d = np.mean(dnp / dnn)
         if a_prev is not None:
             E1[d - 2] = a_d / a_prev
+            if verbose:
+                print(
+                    f"[Cao E1] d={d}/{max_d - 1}: E1({d - 1})={E1[d - 2]:.6g} "
+                    f"completed in {time.perf_counter() - t0:.1f}s",
+                    flush=True,
+                )
+        elif verbose:
+            print(
+                f"[Cao E1] d={d}/{max_d - 1}: baseline a_d={a_d:.6g} "
+                f"completed in {time.perf_counter() - t0:.1f}s",
+                flush=True,
+            )
         a_prev = a_d
     return E1
 
@@ -238,12 +327,24 @@ def cao_e1(X, max_d=20, tau=1, n_samples=20000, seed=0):
 # ---------------------------------------------------------------------------
 def delay_embed(X, d, tau=1):
     """Delay-embed a (T, p) time series into (T - (d-1)*tau, d*p)."""
-    X = np.asarray(X, dtype=float)
+    X = np.asarray(X)
     if X.ndim == 1:
         X = X[:, None]
+    if X.ndim != 2:
+        raise ValueError(f"Expected a 1-D or 2-D time series; got shape {X.shape}")
+    d = int(d)
+    tau = int(tau)
+    if d < 1 or tau < 1:
+        raise ValueError(f"d and tau must be positive integers; got d={d}, tau={tau}")
     T, p = X.shape
     l = T - (d - 1) * tau
-    out = np.zeros((l, d * p))
+    if l <= 0:
+        raise ValueError(
+            f"Time series has {T} rows, too short for d={d}, tau={tau}"
+        )
+    # Preserve float32 projections. The previous implicit float64 conversion
+    # doubled peak memory and was immediately copied back to float32 by callers.
+    out = np.empty((l, d * p), dtype=X.dtype)
     for k in range(d):
         out[:, k * p:(k + 1) * p] = X[k * tau:k * tau + l]
     return out
@@ -289,23 +390,14 @@ def markov_entropy(states, lag, framerate=1.0):
 
 
 def shannon_shuffle(states, seed=None):
-    """Shannon shuffle: preserve the empirical pair frequency p(s_{t+1}|s_t)
-    on aggregate but break long-range correlations.  Used as an entropy
-    surrogate for choosing N."""
+    """Shuffle labels in time while preserving empirical state occupancy.
+
+    This destroys temporal correlations and gives the high-entropy surrogate
+    used by the entropy-gap criterion for choosing ``N``.
+    """
     rng = np.random.default_rng(seed)
     states = np.asarray(states, dtype=int)
-    L = len(states)
-    vals = np.unique(states)
-    positions = {v: np.setdiff1d(np.where(states == v)[0], L - 1) for v in vals}
-    out = np.empty(L, dtype=int)
-    out[0] = states[rng.integers(0, L - 1)]
-    for i in range(1, L):
-        nxt_pool = positions[out[i - 1]]
-        if len(nxt_pool) == 0:
-            out[i] = states[rng.integers(0, L - 1)]
-        else:
-            out[i] = states[rng.choice(nxt_pool) + 1]
-    return out
+    return rng.permutation(states)
 
 
 def entropy_gap(X_embedded, N_values, lag, framerate=1.0, seed=0,

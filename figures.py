@@ -23,6 +23,27 @@ ARM_PALETTE = ['#E69F00', '#56B4E9', '#009E73', '#D55E00']
 ARM_PALETTE_2 = ['#0072B2', '#D55E00']  # two-basin palette for worms
 
 
+def _palette_for_n(n, palette=None):
+    """Return at least n categorical colors."""
+    if palette is None:
+        palette = ARM_PALETTE
+    palette = list(palette)
+    if len(palette) >= n:
+        return palette
+    extra = list(plt.get_cmap('tab20').colors)
+    extra = [mpl.colors.to_hex(c) for c in extra]
+    colors = palette[:]
+    for color in extra:
+        if color not in colors:
+            colors.append(color)
+        if len(colors) >= n:
+            break
+    if len(colors) < n:
+        reps = int(np.ceil(n / len(colors)))
+        colors = (colors * reps)[:n]
+    return colors
+
+
 def setup_style():
     """Set Matplotlib rcParams to match the manuscript aesthetic."""
     # fontTools complains about Apple-specific TrueType tables (Zapf, feat,
@@ -125,8 +146,13 @@ def plot_eigenspace_3d(ax, phi, pi=None, chi=None, hub=None, arm_dirs=None,
     pi, chi, hub, arm_dirs, arm_centroids, palette, marker_scale,
     arm_extension, view : see manuscript Methods Sec. "Arm geometry".
     """
-    if palette is None:
-        palette = ARM_PALETTE
+    if chi is not None:
+        n_colors = chi.shape[1]
+    elif arm_dirs is not None:
+        n_colors = len(arm_dirs)
+    else:
+        n_colors = len(ARM_PALETTE if palette is None else palette)
+    palette = _palette_for_n(n_colors, palette)
     if marker_scale is None:
         marker_scale = 18
     if pi is None:
@@ -181,6 +207,7 @@ def plot_chi_timeseries(ax, t, chi_traces, palette=None, smoothing_window=None,
     if palette is None:
         palette = ARM_PALETTE
     M = chi_traces.shape[1]
+    palette = _palette_for_n(M, palette)
     if labels is None:
         labels = [fr'$\chi_{{{j+1}}}$' for j in range(M)]
     if smoothing_window is not None and smoothing_window > 1:

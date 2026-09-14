@@ -20,9 +20,20 @@ env/
 .idea/
 *.swp
 
-# Generated tables and figure outputs
-outputs/
-*.csv
+# Ignore all of outputs/ except the specific XY_EvenSampled_SlowModes folder.
+# Use outputs/* (not outputs/) so git can descend for the exceptions below.
+outputs/*
+!outputs/multispecies_slow_modes/
+outputs/multispecies_slow_modes/*
+!outputs/multispecies_slow_modes/global_clustering_modes/
+outputs/multispecies_slow_modes/global_clustering_modes/*
+!outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/
+outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/*
+!outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSampled_SlowModes/
+# Exclude states/ within the tracked folder
+outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSampled_SlowModes/states/
+
+# Global file-type exclusions (images, figures, PDFs)
 *.png
 *.jpg
 *.jpeg
@@ -31,3 +42,8 @@ outputs/
 *.tiff
 *.webp
 *.pdf
+
+# CSVs are ignored globally — re-allow them inside the tracked XY folder
+*.csv
+!outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSampled_SlowModes/*.csv
+!outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSampled_SlowModes/**/*.csv

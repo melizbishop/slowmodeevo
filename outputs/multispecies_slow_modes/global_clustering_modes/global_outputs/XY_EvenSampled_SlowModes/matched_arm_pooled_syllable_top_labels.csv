@@ -1,0 +1,3 @@
+aligned_arm,top_labeled_syllables
+1,"0: idle: head low (4.56%, +0.06 log2); 14: groom: curve spine (4.56%, -0.09 log2); 1: idle: head down (4.12%, +0.03 log2); 2: idle: sniff floor (3.92%, +0.04 log2); 23: idle: scrunch idle (3.66%, -0.10 log2); 3: idle: step to stop (3.62%, +0.06 log2); 16: locomotion: brief walk (3.30%, +0.14 log2); 11: locomotion: start moving (3.21%, -0.06 log2)"
+2,"14: groom: curve spine (6.95%, +0.52 log2); 35: groom: groom 2 (6.76%, +1.37 log2); 26: idle: still 2 (6.41%, +1.01 log2); 23: idle: scrunch idle (5.75%, +0.55 log2); 11: locomotion: start moving (4.24%, +0.34 log2); 36: groom: groom 3 (4.08%, +1.02 log2); 37: groom: groom 4 (3.78%, +0.94 log2); 31: groom: groom 1 (3.60%, +0.90 log2)"

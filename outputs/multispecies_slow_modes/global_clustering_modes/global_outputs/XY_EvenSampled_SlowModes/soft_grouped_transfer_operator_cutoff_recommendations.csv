@@ -1,0 +1,9 @@
+species,status,recommended_support_cutoff,recommended_n_retained_clusters,ranking,n_macro_clusters,n_absorbed_clusters,supported_occupancy_fraction,transition_entropy_bits,entropy_convergence_tolerance_bits,entropy_delta_from_full_n_bits,max_leading_eigen_delta_from_full_n
+Mus_caroli,entropy_converged,625,625,occupancy_descending,625,375,0.8565409111702805,7.934533123762817,0.01,-0.003406958528837656,0.17697096129712364
+Mus_musculus,entropy_converged,875,875,occupancy_descending,875,125,0.9932839832205231,7.7588656908124145,0.01,-0.006518286204427959,0.024937444248487095
+Mus_spretus,entropy_converged,425,425,occupancy_descending,425,575,0.9129032729313834,5.9926325426830545,0.01,-0.005934287441156982,0.013156034342846179
+Peromyscus_californicus,entropy_converged,925,925,occupancy_descending,925,75,0.9976615037252543,7.246256108105659,0.01,0.008938079121628029,0.0006343361855590812
+Peromyscus_gossypinus,entropy_converged,975,975,occupancy_descending,975,25,0.998120711527599,6.848589497302618,0.01,0.006233470622993842,0.00027675758122025496
+Peromyscus_leucopus,entropy_converged,325,325,occupancy_descending,325,675,0.5712205553005419,6.550870217424235,0.01,0.0018420107224876858,0.06557331973730818
+Peromyscus_maniculatus,entropy_converged,925,925,occupancy_descending,925,75,0.9862681394681416,7.822348487541861,0.01,-0.005599949145370431,0.00271360427775702
+Peromyscus_polionotus,entropy_converged,675,675,occupancy_descending,675,325,0.8605731885311648,7.427328693681494,0.01,-0.004174634728172144,0.028125944904659694

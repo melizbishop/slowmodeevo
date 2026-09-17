@@ -47,3 +47,6 @@ outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSa
 *.csv
 !outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSampled_SlowModes/*.csv
 !outputs/multispecies_slow_modes/global_clustering_modes/global_outputs/XY_EvenSampled_SlowModes/**/*.csv
+
+# curated MoSeq syllable names/categories (small reference table, must be tracked)
+!moseq_syllable_labels.csv
